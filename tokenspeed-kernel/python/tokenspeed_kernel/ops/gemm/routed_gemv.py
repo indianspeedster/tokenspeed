@@ -303,13 +303,25 @@ def decode_gemv_routed(x: torch.Tensor, weight: torch.Tensor) -> bool:
     ):
         return False
     m, k = x.shape
-    return (m, weight.shape[0], k) in MEASURED_ROUTE and _is_measured_arch(
+    return (m, weight.shape[0], k) in MEASURED_ROUTE and _is_routed_arch(
         x.device.index or 0
     )
 
 
 @functools.lru_cache(maxsize=8)
+def _is_routed_arch(device_index: int) -> bool:
+    """MEASURED_ROUTE's arch floor: sm100 (GB200) and up, matching the
+    registration capability and the GB200 re-sweep the table documents."""
+    from tokenspeed_kernel.platform import current_platform
+
+    if current_platform().vendor != "nvidia":
+        return False
+    return torch.cuda.get_device_capability(device_index) >= (10, 0)
+
+
+@functools.lru_cache(maxsize=8)
 def _is_measured_arch(device_index: int) -> bool:
+    """ADD3_ROUTE's arch floor: its configs were only swept on sm103."""
     from tokenspeed_kernel.platform import current_platform
 
     platform = current_platform()
